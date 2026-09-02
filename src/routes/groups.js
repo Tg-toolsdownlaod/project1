@@ -42,6 +42,74 @@ groupsRouter.post('/add', async (req, res) => {
 });
 
 /**
+ * POST /api/telegram/groups/resolve  { chat_id }
+ *
+ * Used by the "Add Group" screen to auto-verify a pasted Chat ID before it's
+ * saved: looks the chat up live on Telegram and returns its real title,
+ * username, member count and (if it's a forum) topic list, so the frontend
+ * can show a "Connected ✓" preview instead of trusting hand-typed details.
+ */
+groupsRouter.post('/resolve', async (req, res) => {
+  try {
+    const { chat_id } = req.body || {};
+    if (!chat_id) throw new Error('chat_id is required.');
+
+    const client = await getActiveClient();
+    const entity = await resolveEntityByChatId(client, String(chat_id).trim());
+
+    const isGroupLike = ['Channel', 'Chat', 'ChatForbidden', 'ChannelForbidden'].includes(entity.className);
+    if (!isGroupLike) {
+      throw new Error('That ID belongs to a user, not a group or channel.');
+    }
+
+    const isForum = !!entity.forum;
+
+    let participantsCount;
+    try {
+      if (entity.className === 'Channel') {
+        const full = await client.invoke(new Api.channels.GetFullChannel({ channel: entity }));
+        participantsCount = full.fullChat?.participantsCount;
+      } else if (entity.className === 'Chat') {
+        const full = await client.invoke(new Api.messages.GetFullChat({ chatId: entity.id }));
+        participantsCount = full.fullChat?.participantsCount;
+      }
+    } catch (err) {
+      console.warn('[resolve] could not fetch participant count:', err.message);
+    }
+
+    let topics = [];
+    if (isForum) {
+      try {
+        const forumTopics = await client.invoke(
+          new Api.channels.GetForumTopics({ channel: entity, offsetDate: 0, offsetId: 0, offsetTopic: 0, limit: 100 })
+        );
+        topics = forumTopics.topics
+          .filter((t) => t.id !== 1 && t.className === 'ForumTopic')
+          .map((t) => ({ topic_id: String(t.id), title: t.title }));
+      } catch (err) {
+        console.warn('[resolve] could not fetch forum topics:', err.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      title: entity.title || entity.username || String(entity.id),
+      username: entity.username || null,
+      is_forum: isForum,
+      participants_count: participantsCount,
+      topics,
+    });
+  } catch (err) {
+    res.status(404).json({
+      success: false,
+      error:
+        err.message ||
+        'Could not find or access this group with the connected account. Check the Chat ID and make sure the userbot account is a member.',
+    });
+  }
+});
+
+/**
  * Core scan logic, reused by the manual "Scan" button (below) and by the
  * auto-download poller (see autoDownload.js). Returns newly-inserted /
  * updated episode rows so callers can act on just the new ones.
