@@ -1,92 +1,86 @@
-# Telegram Userbot Backend
+# Telegram Video Downloader — Repo តែមួយ
 
-A small always-on Node.js server that does the part Bolt/Supabase can't:
-logging into Telegram as your real account (userbot) via GramJS, scanning
-groups/topics for videos, and downloading them straight to Cloudflare R2.
+កាលមុន project នេះមាន **repo ពីរ**៖
+- `frontend/` — គេហទំព័រ (React) សម្រាប់មើល UI
+- `backend/` — server Node.js ដែលភ្ជាប់ទៅគណនី Telegram របស់អ្នក (userbot) ហើយទាញយកវីដេអូ
 
-Your Bolt app keeps doing everything else (UI, settings storage). This
-server only handles: send code → verify code → list groups → scan → download.
+**មូលហេតុដែលវាញែកគ្នា** មិនមែនកំហុសទេ៖ `backend` ត្រូវការនៅដំណើរការជានិច្ច (long-running
+process) ព្រោះវារក្សាទុកការតភ្ជាប់ទៅ Telegram ដោយផ្ទាល់ ចំណែក `frontend` វិញគ្រាន់តែជា
+ឯកសារ static (HTML/JS/CSS) ដែលអាចដាក់លើ hosting ណាមួយក៏បាន។ ដូច្នេះពួកគេត្រូវការវិធី
+deploy ខុសគ្នា — នេះហើយជាមូលហេតុដែលមានអារម្មណ៍ថា "ពិបាកភ្ជាប់គ្នា"។
 
-## 1. One-time Supabase setup
+ដើម្បីធ្វើឲ្យវាស្រួល ខ្ញុំបានដាក់ទាំងពីរចូល **repo តែមួយ**នេះ ហើយកែ `backend` ឲ្យអាច
+**បម្រើ (serve) frontend ដែល build រួចផងដែរ** — មានន័យថា អ្នកអាចដំណើរការវាជា
+**process តែមួយ, port តែមួយ** បាន (មិនចាំបាច់កំណត់ backend URL ដាច់ដោយឡែកទៀតទេ)។
 
-Run this in the Supabase SQL editor (needed so `groups` can be upserted by
-chat id, and so `episodes` links load their group/topic):
+---
 
+## វិធីទី 1 (ស្រួលបំផុត — recommended): ដំណើរការជា server តែមួយ
+
+ល្អសម្រាប់ដាក់លើ VPS/Railway/Render តែមួយ ឬសាកល្បងក្នុងម៉ាស៊ីនផ្ទាល់ខ្លួន។
+
+```bash
+git clone <your-repo-url>
+cd telegram-video-downloader
+npm run install:all      # install ទាំង backend និង frontend
+
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+# បំពេញ .env ទាំងពីរ (មើលផ្នែក "Environment variables" ខាងក្រោម)
+
+npm run build             # build frontend ហើយចម្លងចូល backend/public
+npm start                 # ដំណើរការ backend — វានឹង serve UI ផងដែរ
+```
+
+បើកមើលនៅ `http://localhost:8787` — នេះជា URL តែមួយសម្រាប់ទាំង UI និង API។
+ដោយសារវាដំណើរការ origin តែមួយ អ្នក**មិនចាំបាច់**កំណត់
+`VITE_TELEGRAM_BACKEND_URL` ក្នុង `frontend/.env` ទេ (ទុកឲ្យទទេបាន)។
+
+## វិធីទី 2: ដំណើរការដាច់ពីគ្នា (dev mode, ឬដាក់ hosting ដាច់ពីគ្នាដូចមុន)
+
+ល្អសម្រាប់ពេលអភិវឌ្ឍន៍ (មាន hot-reload) ឬបើអ្នកចង់ដាក់ frontend លើ Bolt/Vercel/Netlify
+ដាច់ពី backend លើ Railway/Render ដូចមុន។
+
+```bash
+npm run install:all
+npm run dev
+```
+
+វានេះនឹងបើក backend នៅ `http://localhost:8787` និង frontend (dev server, មាន
+hot-reload) នៅ `http://localhost:5173` ក្នុងពេលតែមួយ។ ក្នុងករណីនេះ
+`frontend/.env` ត្រូវកំណត់ `VITE_TELEGRAM_BACKEND_URL=http://localhost:8787`។
+
+---
+
+## Environment variables
+
+### `backend/.env`
+| ឈ្មោះ | អត្ថន័យ |
+|---|---|
+| `SUPABASE_URL` | URL គម្រោង Supabase (ដូចគ្នានឹង frontend) |
+| `SUPABASE_SERVICE_KEY` | **service_role** key (Project Settings → API) — មិនមែន `anon` key ទេ |
+| `ALLOWED_ORIGINS` | localhost:5173 សម្រាប់ dev; ទុកទទេ/មិនចាំបាច់ប្រសិនបើ serve ជាមួយ frontend port តែមួយ |
+| `BACKEND_API_KEY` | ពាក្យសម្ងាត់ណាមួយវែងៗ ដែលអ្នកបង្កើតដោយខ្លួនឯង |
+| `PORT` | port សម្រាប់ server (default 8787) |
+
+### `frontend/.env`
+| ឈ្មោះ | អត្ថន័យ |
+|---|---|
+| `VITE_SUPABASE_URL` | URL គម្រោង Supabase |
+| `VITE_SUPABASE_ANON_KEY` | **anon** key (មិនមែន service_role) |
+| `VITE_TELEGRAM_BACKEND_URL` | ទុកទទេប្រសិនបើប្រើវិធីទី 1 (server តែមួយ); កំណត់ URL backend ប្រសិនបើ deploy ដាច់ដោយឡែក |
+| `VITE_TELEGRAM_BACKEND_KEY` | តម្លៃដូចគ្នានឹង `BACKEND_API_KEY` ខាងលើ |
+
+Supabase migration តែមួយដែលត្រូវរត់ម្តង (SQL editor)៖
 ```sql
 alter table groups add constraint groups_chat_id_key unique (chat_id);
 ```
 
-Get your **service role key**: Supabase dashboard → Project Settings → API →
-`service_role` (NOT the `anon` key — this key bypasses RLS so the backend can
-write scan/download results).
+---
 
-## 2. Configure
+## ចំណាំសុវត្ថិភាព
 
-```bash
-cp .env.example .env
-```
-
-Fill in:
-- `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` — from your Supabase project
-- `ALLOWED_ORIGINS` — your Bolt app's URL, e.g. `https://telegram-group-video-txgk.bolt.host`
-- `BACKEND_API_KEY` — make up any long random string; you'll also paste this into the frontend
-
-## 3. Run locally to test
-
-```bash
-npm install
-npm run start
-```
-
-Server runs on `http://localhost:8787`. Test it:
-
-```bash
-curl http://localhost:8787/health
-```
-
-## 4. Deploy (Railway example)
-
-1. Push this folder to a new GitHub repo (or use Railway's "Deploy from local folder" CLI).
-2. On [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
-3. Add the same environment variables from `.env` in Railway's Variables tab.
-4. Railway gives you a public URL like `https://your-app.up.railway.app`. That's your backend URL.
-
-Render works the same way: New → Web Service → connect repo → set env vars →
-Build command `npm install`, Start command `npm run start`.
-
-**Important:** these are long-lived Node processes, so use Railway/Render's
-"Web Service" (not serverless/edge functions) — the Telegram connection needs
-to stay open, unlike a typical stateless API.
-
-## 5. Point the frontend at it
-
-In your Bolt app's `.env` (or Bolt's environment variables panel), add:
-
-```
-VITE_TELEGRAM_BACKEND_URL=https://your-app.up.railway.app
-VITE_TELEGRAM_BACKEND_KEY=same-value-as-BACKEND_API_KEY
-```
-
-Then redeploy/republish the Bolt app. The Telegram page will now actually
-send a real login code to your phone and let you type it in to connect.
-
-## API endpoints
-
-All require header `x-api-key: <BACKEND_API_KEY>`.
-
-- `POST /api/telegram/send-code` — sends the login code to your phone
-- `POST /api/telegram/verify-code` `{ code, password? }` — verifies it (password only if Telegram asks for 2FA)
-- `GET /api/telegram/status` — is a session currently connected
-- `POST /api/telegram/logout`
-- `POST /api/telegram/groups/sync` — pulls your groups/channels into the `groups` table
-- `POST /api/telegram/scan` `{ groupId, topicId?, limit? }` — finds videos, saves as `episodes`
-- `POST /api/telegram/download` `{ episodeId }` — downloads the video and uploads it to R2
-
-## Security notes
-
-- The session string this server saves in `telegram_settings.session_string`
-  gives full control of your Telegram account. Keep `SUPABASE_SERVICE_KEY`
-  and `BACKEND_API_KEY` secret, and don't expose this server without the
-  API-key middleware.
-- Respect Telegram's Terms of Service — userbots that scrape/download at
-  high volume can get the account rate-limited or banned.
+`session_string` ដែល backend រក្សាទុកក្នុង `telegram_settings` ផ្តល់សិទ្ធិពេញលេញលើ
+គណនី Telegram របស់អ្នក។ កុំបញ្ចេញ `SUPABASE_SERVICE_KEY` និង `BACKEND_API_KEY` ជាសាធារណៈ
+ឲ្យសោះ ហើយប្រើ Telegram userbot ដោយគោរពតាម Terms of Service របស់ Telegram
+(ការទាញយក/scan ក្នុងបរិមាណច្រើនពេក អាចធ្វើឲ្យគណនីត្រូវ rate-limit ឬ ban)។
