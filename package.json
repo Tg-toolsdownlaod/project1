@@ -1,0 +1,23 @@
+{
+  "name": "tg-downloader-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram userbot service for TG Downloader: scan, download to R2, forward between groups.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "login": "node src/login.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@aws-sdk/lib-storage": "^3.700.0",
+    "@supabase/supabase-js": "^2.57.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "teleproto": "^1.229.0"
+  }
+}

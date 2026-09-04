@@ -1,0 +1,13 @@
+# Railway reads this when the service's Root Directory is set to
+# backend-node. It builds the existing Dockerfile and polls /health (the one
+# route with no API key) to know the deploy actually came up before routing
+# traffic to it.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
