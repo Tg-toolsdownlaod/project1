@@ -254,6 +254,68 @@ app.post(
   })
 );
 
+/**
+ * Uploads a video picked in the control panel straight into R2 and answers
+ * with its public URL, ready to paste anywhere.
+ *
+ * The body is the raw file, not a form: express.json() only touches
+ * application/json, so the request stream arrives here untouched and goes to
+ * R2 chunk by chunk. Nothing is buffered in memory or staged on disk, which
+ * is what makes a multi-gigabyte video possible on a small container.
+ */
+app.post(
+  "/api/r2/upload",
+  requireApiKey,
+  route(async (req, res) => {
+    const fileName = String(req.query.name ?? "").trim();
+    if (!fileName) {
+      return res.status(400).json({ success: false, error: "A file name is required." });
+    }
+    const contentType = req.get("content-type") || "application/octet-stream";
+    if (contentType.startsWith("application/json")) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Send the file itself as the request body." });
+    }
+
+    const key = r2.buildUploadKey(String(req.query.folder ?? "uploads"), fileName);
+    const url = await r2.uploadBody(req, key, contentType);
+    const size = Number.parseInt(req.get("content-length") ?? "", 10);
+
+    res.json({
+      success: true,
+      key,
+      // Falls back to the bare key when no public URL is configured, so the UI
+      // can tell the operator the file is in R2 but not reachable yet.
+      url: url === key ? null : url,
+      size: Number.isFinite(size) ? size : null,
+    });
+  })
+);
+
+/** Lists what is actually in the bucket, so the panel can show real URLs. */
+app.post(
+  "/api/r2/objects",
+  requireApiKey,
+  route(async (req, res) => {
+    const { prefix = "", limit = 100 } = req.body ?? {};
+    const result = await r2.listObjects(String(prefix), Math.min(Number(limit) || 100, 1000));
+    res.json({ success: true, ...result });
+  })
+);
+
+/** Deletes one object, for undoing a mistaken upload. */
+app.post(
+  "/api/r2/delete",
+  requireApiKey,
+  route(async (req, res) => {
+    const key = String(req.body?.key ?? "").trim();
+    if (!key) return res.status(400).json({ success: false, error: "A key is required." });
+    await r2.remove(key);
+    res.json({ success: true });
+  })
+);
+
 // The frontend reads {success, error} off every response, so a crash has to
 // keep that shape -- Express's default HTML error page would leave the user
 // with a generic "Request to backend failed." instead of the real reason.
@@ -262,9 +324,16 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ success: false, error: String(err?.message ?? err).slice(0, 500) });
 });
 
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   console.log(`Userbot service listening on http://localhost:${config.port}`);
   void loop();
 });
+
+// Node closes a request that takes longer than five minutes by default, which
+// is nothing for a video upload on a slow line. Uploads stream in, so a slow
+// client is not holding anything expensive open -- let them take as long as
+// they need, and let the headers timeout keep the usual protection.
+server.requestTimeout = 0;
+server.headersTimeout = 60_000;
 
 export { app };

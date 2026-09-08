@@ -149,6 +149,19 @@ Every `WORKER_INTERVAL` seconds (default 30), while the userbot is signed in:
 3. **Auto-follow forwards** — adds newly scanned videos to forward jobs with
    `auto_follow = true`, then works any queued job.
 
+## Uploading a video by hand
+
+The R2 page in the control panel can also put a video into the bucket directly,
+without Telegram: drop a file on the upload card and the browser streams it to
+`POST /api/r2/upload`, which streams it on into R2 and answers with the public
+URL, ready to copy. Nothing is buffered in memory or staged in `DOWNLOAD_DIR`,
+so a multi-gigabyte file needs no disk on the service.
+
+The URL only comes back when **Public URL** is filled in on the R2 settings
+(your `*.r2.dev` address, or a custom domain bound to the bucket). Without it
+the file still lands in R2, but there is no public address for the panel to
+hand back.
+
 ## Notes on the Telegram library
 
 This uses [teleproto](https://www.npmjs.com/package/teleproto), the maintained
