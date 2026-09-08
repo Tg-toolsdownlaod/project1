@@ -149,6 +149,32 @@ Every `WORKER_INTERVAL` seconds (default 30), while the userbot is signed in:
 3. **Auto-follow forwards** — adds newly scanned videos to forward jobs with
    `auto_follow = true`, then works any queued job.
 
+## Uploading a video by hand
+
+The R2 page in the control panel can also put a video into the bucket directly,
+without Telegram: drop a file on the upload card and the browser streams it to
+`POST /api/r2/upload`, which streams it on into R2 and answers with the public
+URL, ready to copy. Nothing is buffered in memory or staged in `DOWNLOAD_DIR`,
+so a multi-gigabyte file needs no disk on the service.
+
+The URL only comes back when **Public URL** is filled in on the R2 settings
+(your `*.r2.dev` address, or a custom domain bound to the bucket). Without it
+the file still lands in R2, but there is no public address for the panel to
+hand back.
+
+## Saving a URL list into R2
+
+The URL Lists page collects links; **Save all to R2** hands them to this
+service, which fetches each one and streams it into the bucket, writing the key
+and the public URL back onto the row. Files land in `URL_FETCH_FOLDER` (default
+`urls`) and `MAX_CONCURRENT_URL_FETCHES` (default 2) run at a time. This does
+not need Telegram — it keeps working while the userbot is signed out.
+
+Only public `http://`/`https://` addresses are fetched. Every hop of a redirect
+chain is resolved first and refused if it lands on a loopback, link-local or
+private address: this process holds the Supabase service-role key and the R2
+secret, so a pasted URL must not be able to point it at its own network.
+
 ## Notes on the Telegram library
 
 This uses [teleproto](https://www.npmjs.com/package/teleproto), the maintained

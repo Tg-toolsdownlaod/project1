@@ -31,6 +31,12 @@ export const config = {
   r2Region: str("R2_REGION", "auto"),
 
   workerInterval: int("WORKER_INTERVAL", 30),
+  // How many list URLs are pulled into R2 at once. These are plain HTTP
+  // transfers with no Telegram flood limit behind them, so the only ceiling is
+  // the link -- but two at a time keeps one slow host from stalling the rest.
+  maxConcurrentUrlFetches: int("MAX_CONCURRENT_URL_FETCHES", 2),
+  // Where saved URL-list videos land in the bucket.
+  urlFetchFolder: str("URL_FETCH_FOLDER", "urls"),
   maxConcurrentDownloads: int("MAX_CONCURRENT_DOWNLOADS", 0),
   // Telegram's own per-account throttle, not a cap we invent: teleproto already
   // opens up to 8 parallel connections per download and grows the window
