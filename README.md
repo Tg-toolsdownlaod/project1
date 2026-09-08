@@ -162,6 +162,19 @@ The URL only comes back when **Public URL** is filled in on the R2 settings
 the file still lands in R2, but there is no public address for the panel to
 hand back.
 
+## Saving a URL list into R2
+
+The URL Lists page collects links; **Save all to R2** hands them to this
+service, which fetches each one and streams it into the bucket, writing the key
+and the public URL back onto the row. Files land in `URL_FETCH_FOLDER` (default
+`urls`) and `MAX_CONCURRENT_URL_FETCHES` (default 2) run at a time. This does
+not need Telegram — it keeps working while the userbot is signed out.
+
+Only public `http://`/`https://` addresses are fetched. Every hop of a redirect
+chain is resolved first and refused if it lands on a loopback, link-local or
+private address: this process holds the Supabase service-role key and the R2
+secret, so a pasted URL must not be able to point it at its own network.
+
 ## Notes on the Telegram library
 
 This uses [teleproto](https://www.npmjs.com/package/teleproto), the maintained

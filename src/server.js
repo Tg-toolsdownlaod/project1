@@ -14,6 +14,7 @@ import * as forwarder from "./forwarder.js";
 import * as mirror from "./mirror.js";
 import * as takeout from "./takeout.js";
 import * as r2 from "./r2.js";
+import * as urlfetch from "./urlfetch.js";
 import { scanGroup } from "./scanner.js";
 import * as telegram from "./telegram.js";
 import { loop } from "./worker.js";
@@ -312,6 +313,50 @@ app.post(
     const key = String(req.body?.key ?? "").trim();
     if (!key) return res.status(400).json({ success: false, error: "A key is required." });
     await r2.remove(key);
+    res.json({ success: true });
+  })
+);
+
+// ---------------------------------------------------------------- url lists
+
+/**
+ * Saves the URLs of a list into R2: each one is fetched and streamed into the
+ * bucket, and the `url_list_items` row gets the key and the public URL back.
+ * The reply comes as soon as the work is queued -- the page follows the rows.
+ */
+app.post(
+  "/api/urls/lists/:listId/save",
+  requireApiKey,
+  route(async (req, res) => {
+    const queued = await urlfetch.queueList(req.params.listId);
+    spawn(urlfetch.processQueue(), "URL queue");
+    res.json({ success: true, queued });
+  })
+);
+
+/** The same, for the items the operator ticked rather than a whole list. */
+app.post(
+  "/api/urls/items/save",
+  requireApiKey,
+  route(async (req, res) => {
+    const ids = Array.isArray(req.body?.item_ids) ? req.body.item_ids : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ success: false, error: "No items were given." });
+    }
+    const queued = await urlfetch.queueItems(ids);
+    spawn(urlfetch.processQueue(), "URL queue");
+    res.json({ success: true, queued });
+  })
+);
+
+/** Checks one URL is fetchable before the operator commits a whole list to it. */
+app.post(
+  "/api/urls/check",
+  requireApiKey,
+  route(async (req, res) => {
+    const url = String(req.body?.url ?? "").trim();
+    if (!url) return res.status(400).json({ success: false, error: "A URL is required." });
+    await urlfetch.assertPublicUrl(url);
     res.json({ success: true });
   })
 );

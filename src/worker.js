@@ -5,6 +5,7 @@ import { applyAutoRules, processQueue } from "./downloader.js";
 import * as forwarder from "./forwarder.js";
 import * as mirror from "./mirror.js";
 import { isAuthorized } from "./telegram.js";
+import * as urlfetch from "./urlfetch.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -12,6 +13,11 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function loop() {
   for (;;) {
     try {
+      // Saving list URLs into R2 is plain HTTP: it must keep working while the
+      // userbot is signed out, so it runs outside the Telegram-only pass.
+      const savingUrls = await urlfetch.processQueue();
+      if (savingUrls) console.log(`Started saving ${savingUrls} URL(s) to R2`);
+
       if (await isAuthorized()) await onePass();
     } catch (err) {
       // A bad pass must never kill the loop.

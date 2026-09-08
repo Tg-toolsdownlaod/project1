@@ -13,28 +13,64 @@ import { r2Settings } from "./db.js";
 
 async function clientAndBucket() {
   const conf = await r2Settings();
-  const missing = ["accessKeyId", "secretAccessKey", "bucketName"].filter((k) => !conf[k]);
+  // A key pasted out of the Cloudflare dashboard often carries a trailing
+  // space or newline. Signing with it fails with an opaque SignatureDoesNotMatch,
+  // so trim before anything else touches the credentials.
+  const accessKeyId = (conf.accessKeyId || "").trim();
+  const secretAccessKey = (conf.secretAccessKey || "").trim();
+  const bucket = (conf.bucketName || "").trim();
+
+  const missing = [
+    ["accessKeyId", accessKeyId],
+    ["secretAccessKey", secretAccessKey],
+    ["bucketName", bucket],
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
   if (missing.length) {
     throw new Error(`R2 is not configured: missing ${missing.join(", ")}.`);
   }
 
-  const endpoint =
-    conf.endpointUrl ||
-    (conf.accountId ? `https://${conf.accountId}.r2.cloudflarestorage.com` : "");
+  const endpoint = normalizeEndpoint(conf.endpointUrl, conf.accountId, bucket);
   if (!endpoint) {
     throw new Error("R2 is not configured: no endpoint URL or account ID.");
   }
 
   const client = new S3Client({
-    region: conf.region || "auto",
+    region: (conf.region || "auto").trim(),
     endpoint,
     forcePathStyle: true,
-    credentials: {
-      accessKeyId: conf.accessKeyId,
-      secretAccessKey: conf.secretAccessKey,
-    },
+    credentials: { accessKeyId, secretAccessKey },
   });
-  return { client, bucket: conf.bucketName, conf };
+  return { client, bucket, conf };
+}
+
+/**
+ * The endpoint R2 shows in its dashboard is the account URL. Cloudflare also
+ * displays a per-bucket S3 URL ending in the bucket name, and pasting that one
+ * is the easy mistake: with forcePathStyle the SDK appends the bucket again and
+ * every request goes to /bucket/bucket/key, which R2 answers with a 404. Strip
+ * the trailing bucket segment so either form works.
+ */
+export function normalizeEndpoint(endpointUrl, accountId, bucket) {
+  const raw = (endpointUrl || "").trim();
+  if (!raw) {
+    const id = (accountId || "").trim();
+    return id ? `https://${id}.r2.cloudflarestorage.com` : "";
+  }
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let url;
+  try {
+    url = new URL(withScheme);
+  } catch {
+    return withScheme.replace(/\/+$/, "");
+  }
+  const segments = url.pathname.split("/").filter(Boolean);
+  if (bucket && segments.length && segments[segments.length - 1] === bucket) {
+    segments.pop();
+  }
+  url.pathname = segments.length ? `/${segments.join("/")}` : "/";
+  return url.toString().replace(/\/+$/, "");
 }
 
 /** Cheap reachability check for /health — one HEAD, no listing. */
