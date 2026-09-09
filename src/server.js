@@ -14,6 +14,7 @@ import * as forwarder from "./forwarder.js";
 import * as mirror from "./mirror.js";
 import * as takeout from "./takeout.js";
 import * as r2 from "./r2.js";
+import * as s3migrate from "./s3migrate.js";
 import * as urlfetch from "./urlfetch.js";
 import { scanGroup } from "./scanner.js";
 import * as telegram from "./telegram.js";
@@ -315,6 +316,38 @@ app.post(
     await r2.remove(key);
     res.json({ success: true });
   })
+);
+
+// ---------------------------------------------------------------- s3 import (one-time)
+
+/**
+ * Kicks off a one-time migration: every object in the source S3-compatible
+ * bucket (S3_* env vars) is streamed straight into R2 and, once confirmed
+ * there, deleted from the source. The body never touches disk on the way
+ * through. Pass dry_run: true to just count what would move, without
+ * changing anything.
+ *
+ * Answers immediately -- the run itself can take a long time for a big
+ * bucket -- and the frontend follows progress with /api/s3import/status.
+ */
+app.post(
+  "/api/s3import/run",
+  requireApiKey,
+  route(async (req, res) => {
+    const prefix = String(req.body?.prefix ?? "");
+    const dryRun = req.body?.dry_run === true;
+    const deleteSource = req.body?.delete_source !== false;
+    const concurrency = Math.min(Math.max(Number(req.body?.concurrency) || 2, 1), 8);
+    spawn(s3migrate.run({ prefix, dryRun, deleteSource, concurrency }), "S3 import");
+    res.json({ success: true, status: "started" });
+  })
+);
+
+/** The current or most recent run's counters, for a progress bar. */
+app.post(
+  "/api/s3import/status",
+  requireApiKey,
+  route(async (_req, res) => res.json({ success: true, ...s3migrate.status() }))
 );
 
 // ---------------------------------------------------------------- url lists

@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import {
   DeleteObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -174,6 +175,18 @@ export async function listObjects(prefix = "", limit = 100) {
 export async function remove(key) {
   const { client, bucket } = await clientAndBucket();
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+/** Existence + size check -- used by s3migrate.js to skip already-migrated objects. */
+export async function headObject(key) {
+  const { client, bucket } = await clientAndBucket();
+  try {
+    const result = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return { exists: true, size: result.ContentLength ?? 0 };
+  } catch (err) {
+    if (err?.$metadata?.httpStatusCode === 404 || err?.name === "NotFound") return { exists: false, size: 0 };
+    throw err;
+  }
 }
 
 /**

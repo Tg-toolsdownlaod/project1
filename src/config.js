@@ -30,6 +30,17 @@ export const config = {
   r2PublicUrl: str("R2_PUBLIC_URL"),
   r2Region: str("R2_REGION", "auto"),
 
+  // Source S3-compatible bucket (e.g. Contabo), used only by
+  // src/migrate-s3-to-r2.js / POST /api/s3import/* to pull existing videos
+  // into R2 once and then delete them here. Both key names are accepted
+  // since providers' setup docs disagree on which one they show.
+  s3Endpoint: str("S3_ENDPOINT"),
+  s3AccessKeyId: str("S3_ACCESS_KEY_ID", str("S3_ACCESS_KEY")),
+  s3SecretAccessKey: str("S3_SECRET_ACCESS_KEY", str("S3_SECRET_KEY")),
+  s3BucketName: str("S3_BUCKET_NAME"),
+  s3Region: str("S3_REGION", "us-east-1"),
+  s3ForcePathStyle: str("S3_FORCE_PATH_STYLE") === "true",
+
   workerInterval: int("WORKER_INTERVAL", 30),
   // How many list URLs are pulled into R2 at once. These are plain HTTP
   // transfers with no Telegram flood limit behind them, so the only ceiling is
