@@ -57,15 +57,30 @@ export async function telegramSettings() {
 
 /** R2 credentials, preferring environment variables over the database. */
 export async function r2Settings() {
+  const fromEnv = {
+    accountId: config.r2AccountId,
+    accessKeyId: config.r2AccessKeyId,
+    secretAccessKey: config.r2SecretAccessKey,
+    bucketName: config.r2BucketName,
+    endpointUrl: config.r2EndpointUrl,
+    publicUrl: config.r2PublicUrl,
+    region: config.r2Region || "auto",
+  };
+  // Fully configured by environment variables -- skip Supabase entirely, so a
+  // local one-off script (e.g. the S3-to-R2 migration) needs no
+  // SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY just to read R2 credentials.
+  if (fromEnv.accessKeyId && fromEnv.secretAccessKey && fromEnv.bucketName && (fromEnv.endpointUrl || fromEnv.accountId)) {
+    return fromEnv;
+  }
   const row = await single("r2_settings");
   return {
-    accountId: config.r2AccountId || row.account_id || "",
-    accessKeyId: config.r2AccessKeyId || row.access_key_id || "",
-    secretAccessKey: config.r2SecretAccessKey || row.secret_access_key || "",
-    bucketName: config.r2BucketName || row.bucket_name || "",
-    endpointUrl: config.r2EndpointUrl || row.endpoint_url || "",
-    publicUrl: config.r2PublicUrl || row.public_url || "",
-    region: config.r2Region || row.region || "auto",
+    accountId: fromEnv.accountId || row.account_id || "",
+    accessKeyId: fromEnv.accessKeyId || row.access_key_id || "",
+    secretAccessKey: fromEnv.secretAccessKey || row.secret_access_key || "",
+    bucketName: fromEnv.bucketName || row.bucket_name || "",
+    endpointUrl: fromEnv.endpointUrl || row.endpoint_url || "",
+    publicUrl: fromEnv.publicUrl || row.public_url || "",
+    region: fromEnv.region || row.region || "auto",
   };
 }
 
