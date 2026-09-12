@@ -11,6 +11,7 @@ import { Readable } from "node:stream";
 
 import { config } from "./config.js";
 import { db, nowIso, rows } from "./db.js";
+import { recordManualUpload } from "./library.js";
 import * as r2 from "./r2.js";
 
 const running = new Set();
@@ -78,6 +79,14 @@ export async function saveItem(itemId) {
     if (found.length === 0) return;
     const item = found[0];
 
+    const [list] = rows(
+      await db().from("url_lists").select("title").eq("id", item.url_list_id).limit(1)
+    );
+    // The list's own title doubles as the show name, so every URL saved from
+    // it lands next to the others under one readable folder instead of all
+    // piling into a single flat "urls/" bucket with no way to tell them apart.
+    const showTitle = (list?.title || "").trim() || config.urlFetchFolder;
+
     await patch(itemId, { status: "downloading", error: null });
 
     const response = await fetchFollowingRedirects(item.url);
@@ -85,24 +94,34 @@ export async function saveItem(itemId) {
       throw new Error(`The server answered ${response.status} ${response.statusText}.`);
     }
 
-    const key = r2.buildUploadKey(
-      config.urlFetchFolder,
-      fileNameFor(item, response)
-    );
+    const fileName = fileNameFor(item, response);
+    const key = buildListItemKey(showTitle, item, fileName);
     const url = await r2.uploadBody(
       Readable.fromWeb(response.body),
       key,
       response.headers.get("content-type") || "video/mp4"
     );
     const size = Number.parseInt(response.headers.get("content-length") ?? "", 10);
+    const publicUrl = url === key ? null : url;
 
     await patch(itemId, {
       status: "completed",
       r2_key: key,
-      r2_url: url === key ? null : url,
+      r2_url: publicUrl,
       file_size: Number.isFinite(size) ? size : null,
       error: null,
     });
+
+    await recordManualUpload({
+      show: showTitle,
+      season: "",
+      episodeNumber: item.episode_number ?? null,
+      label: item.label || "",
+      key,
+      url: publicUrl,
+      size: Number.isFinite(size) ? size : 0,
+      fileName,
+    }).catch((err) => console.error("Filing URL-list item as an episode failed:", err?.message ?? err));
   } catch (err) {
     const message = String(err?.message ?? err).slice(0, 500);
     console.error(`Saving URL item ${itemId} to R2 failed:`, message);
@@ -189,6 +208,23 @@ export function isPrivateAddress(address) {
   // ::ffff:10.0.0.1 and friends are IPv4 wearing an IPv6 hat.
   const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   return mapped ? isPrivateAddress(mapped[1]) : false;
+}
+
+/**
+ * A readable, deterministic key for a saved URL-list item: the show
+ * (the list's own title) plus an episode number or a slugged label -- so the
+ * key and the public URL say on their own which show and which episode it
+ * is, and re-saving the same item overwrites it instead of piling up copies.
+ */
+function buildListItemKey(showTitle, item, fileName) {
+  const dir = r2.slugPath(showTitle) || "urls";
+  const dot = fileName.lastIndexOf(".");
+  const ext = (dot > 0 ? fileName.slice(dot + 1) : "").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
+  const hasEp = item.episode_number !== null && item.episode_number !== undefined;
+  const namePart = hasEp
+    ? `EP${String(item.episode_number).padStart(3, "0")}`
+    : r2.slugPath(item.label || (dot > 0 ? fileName.slice(0, dot) : fileName)) || "video";
+  return `${dir}/${namePart}.${ext}`;
 }
 
 /** A readable file name for an item: its label, its episode number, or the URL. */
