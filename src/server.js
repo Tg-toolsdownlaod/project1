@@ -11,6 +11,7 @@ import { config } from "./config.js";
 import { db, nowIso, upsertSingle } from "./db.js";
 import { applyAutoRules, retryFailed, runDownload } from "./downloader.js";
 import * as forwarder from "./forwarder.js";
+import { recordManualUpload } from "./library.js";
 import * as mirror from "./mirror.js";
 import * as takeout from "./takeout.js";
 import * as r2 from "./r2.js";
@@ -269,6 +270,12 @@ app.post(
  * show/episode fields (e.g. "naruto/season-1/EP007.mp4") -- so re-uploading
  * the same episode overwrites it instead of piling up random-suffixed
  * duplicates. `folder` + `name` is kept as the fallback for older callers.
+ *
+ * When the panel also sends `show`, this upload is filed as an episode too
+ * (see library.js), so it shows up in Groups/Downloads next to videos
+ * pulled from Telegram -- grouped by show, sorted by episode -- instead of
+ * only existing as a bucket key. A failure there never fails the upload
+ * itself: the file is already safely in R2 by that point.
  */
 app.post(
   "/api/r2/upload",
@@ -289,13 +296,29 @@ app.post(
     const key = explicitKey || r2.buildUploadKey(String(req.query.folder ?? "uploads"), fileName);
     const url = await r2.uploadBody(req, key, contentType);
     const size = Number.parseInt(req.get("content-length") ?? "", 10);
+    const publicUrl = url === key ? null : url;
+
+    const show = String(req.query.show ?? "").trim();
+    if (show) {
+      const episodeNumber = Number.parseInt(String(req.query.episode ?? ""), 10);
+      await recordManualUpload({
+        show,
+        season: String(req.query.season ?? ""),
+        episodeNumber: Number.isFinite(episodeNumber) ? episodeNumber : null,
+        label: String(req.query.label ?? ""),
+        key,
+        url: publicUrl,
+        size: Number.isFinite(size) ? size : 0,
+        fileName,
+      }).catch((err) => console.error("Filing manual upload as an episode failed:", err?.message ?? err));
+    }
 
     res.json({
       success: true,
       key,
-      // Falls back to the bare key when no public URL is configured, so the UI
-      // can tell the operator the file is in R2 but not reachable yet.
-      url: url === key ? null : url,
+      // Falls back to null when no public URL is configured, so the UI can
+      // tell the operator the file is in R2 but not reachable yet.
+      url: publicUrl,
       size: Number.isFinite(size) ? size : null,
     });
   })

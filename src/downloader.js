@@ -156,7 +156,10 @@ export async function runDownload(downloadId) {
         downloaded_bytes: size,
       })
       .eq("id", downloadId);
-    await db().from("episodes").update({ status: "completed", r2_key: r2Key }).eq("id", episode.id);
+    await db()
+      .from("episodes")
+      .update({ status: "completed", r2_key: r2Key, r2_url: r2Url })
+      .eq("id", episode.id);
     await refreshCounters(group.id, episode.topic_id);
   } catch (err) {
     await fail(downloadId, String(err?.message ?? err).slice(0, 500));
