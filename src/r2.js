@@ -205,7 +205,7 @@ export function buildUploadKey(folder, fileName) {
 }
 
 /** Slugs each segment of a folder path, dropping empty and dot-only ones. */
-function slugPath(value) {
+export function slugPath(value) {
   return String(value || "")
     .split("/")
     .map((part) => part.trim())

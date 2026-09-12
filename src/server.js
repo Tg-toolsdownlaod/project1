@@ -264,6 +264,11 @@ app.post(
  * application/json, so the request stream arrives here untouched and goes to
  * R2 chunk by chunk. Nothing is buffered in memory or staged on disk, which
  * is what makes a multi-gigabyte video possible on a small container.
+ *
+ * The panel normally sends `key` itself -- a readable path it built from the
+ * show/episode fields (e.g. "naruto/season-1/EP007.mp4") -- so re-uploading
+ * the same episode overwrites it instead of piling up random-suffixed
+ * duplicates. `folder` + `name` is kept as the fallback for older callers.
  */
 app.post(
   "/api/r2/upload",
@@ -280,7 +285,8 @@ app.post(
         .json({ success: false, error: "Send the file itself as the request body." });
     }
 
-    const key = r2.buildUploadKey(String(req.query.folder ?? "uploads"), fileName);
+    const explicitKey = r2.slugPath(String(req.query.key ?? ""));
+    const key = explicitKey || r2.buildUploadKey(String(req.query.folder ?? "uploads"), fileName);
     const url = await r2.uploadBody(req, key, contentType);
     const size = Number.parseInt(req.get("content-length") ?? "", 10);
 
