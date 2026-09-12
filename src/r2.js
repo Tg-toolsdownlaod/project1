@@ -226,6 +226,9 @@ export function buildKey(pattern, group, topic, ep, fileName) {
 }
 
 function slug(value) {
-  const cleaned = (value || "").replace(/[^\p{L}\p{N}\-. ]+/gu, "").trim();
+  // \p{M} keeps combining marks -- Khmer (and Vietnamese, Devanagari, ...)
+  // spell most vowels and the subscript sign as marks attached to a letter,
+  // so dropping them silently corrupted non-Latin names into the wrong word.
+  const cleaned = (value || "").replace(/[^\p{L}\p{M}\p{N}\-. ]+/gu, "").trim();
   return cleaned.replace(/\s+/g, "-") || "untitled";
 }
