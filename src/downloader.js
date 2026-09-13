@@ -141,7 +141,8 @@ export async function runDownload(downloadId) {
         episode.file_name || "video.mp4"
       );
       await db().from("downloads").update({ progress: 92 }).eq("id", downloadId);
-      r2Url = await r2.upload(localPath, r2Key);
+      const contentType = episode.mime_type || (episode.media_type === "audio" ? "audio/mpeg" : "video/mp4");
+      r2Url = await r2.upload(localPath, r2Key, contentType);
     }
 
     const { size } = await fs.stat(localPath);

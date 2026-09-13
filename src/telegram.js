@@ -272,6 +272,46 @@ export async function listDialogs(limit = 200) {
 }
 
 /**
+ * Searches Telegram's global directory of public groups/channels by keyword
+ * -- the same lookup the official app's search box does -- so a group the
+ * account has never joined can be found before joinChat() is used on it.
+ * People (PeerUser results) are dropped: this is only for finding places to
+ * join and scan, not for contact lookup.
+ */
+export async function searchPublicChats(query, limit = 20) {
+  const q = String(query ?? "").trim();
+  if (!q) return [];
+
+  const c = await getClient();
+  const result = await c.invoke(new Api.contacts.Search({ q, limit }));
+  const chatById = new Map((result.chats ?? []).map((chat) => [String(chat.id), chat]));
+
+  const found = [];
+  const seen = new Set();
+  for (const peer of result.results ?? []) {
+    let chat;
+    if (peer instanceof Api.PeerChannel) chat = chatById.get(String(peer.channelId));
+    else if (peer instanceof Api.PeerChat) chat = chatById.get(String(peer.chatId));
+    else continue; // a PeerUser -- not something that can be scanned
+
+    if (!chat || seen.has(String(chat.id))) continue;
+    seen.add(String(chat.id));
+
+    found.push({
+      chat_id: String(chat.id),
+      title: chat.title || String(chat.id),
+      username: chat.username ?? null,
+      is_channel: Boolean(chat.broadcast),
+      is_megagroup: Boolean(chat.megagroup),
+      participants_count: chat.participantsCount ?? null,
+      // `left` is only meaningful on channels/megagroups; absent elsewhere.
+      already_joined: chat.left === false,
+    });
+  }
+  return found;
+}
+
+/**
  * Joins a public @name or a t.me/+hash invite link, then describes what was
  * joined so the UI can add it straight away.
  */

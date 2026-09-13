@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
@@ -169,6 +170,21 @@ export async function listObjects(prefix = "", limit = 100) {
 
   objects.sort((a, b) => String(b.last_modified).localeCompare(String(a.last_modified)));
   return { bucket, objects: objects.slice(0, limit), total: objects.length };
+}
+
+/**
+ * Opens a streaming read of one object -- used by /api/r2/download to proxy
+ * the file through with a Content-Disposition header, so a browser saves it
+ * to the device regardless of whether the bucket has a public URL at all.
+ */
+export async function getObjectStream(key) {
+  const { client, bucket } = await clientAndBucket();
+  const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  return {
+    stream: result.Body,
+    contentType: result.ContentType || "application/octet-stream",
+    contentLength: result.ContentLength,
+  };
 }
 
 /** Removes one object, so a mistaken upload can be undone from the panel. */

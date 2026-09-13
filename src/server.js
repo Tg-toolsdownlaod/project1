@@ -36,14 +36,23 @@ app.use(
 /** Express 4 does not forward async rejections, so every handler is wrapped. */
 const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res)).catch(next);
 
-/** Rejects anything that does not carry the shared secret. */
+/**
+ * Rejects anything that does not carry the shared secret. Accepts the key as
+ * a query param too -- not just the x-api-key header -- because the one
+ * route that needs a plain browser navigation (/api/r2/download, so the
+ * browser's own save dialog triggers) can't attach headers to an <a> click.
+ * The key is already shipped to the browser today (VITE_TELEGRAM_BACKEND_KEY
+ * ships in the frontend bundle for every other call's x-api-key), so this
+ * doesn't expose anything that wasn't already public.
+ */
 function requireApiKey(req, res, next) {
   if (!config.apiKey) {
     return res
       .status(500)
       .json({ success: false, error: "BACKEND_API_KEY is not configured on the server." });
   }
-  if (req.get("x-api-key") !== config.apiKey) {
+  const provided = req.get("x-api-key") || req.query.api_key;
+  if (provided !== config.apiKey) {
     return res.status(401).json({ success: false, error: "Invalid API key." });
   }
   return next();
@@ -140,6 +149,20 @@ app.post(
       return res.status(400).json({ success: false, error: "invite is required." });
     }
     return res.json(await telegram.joinChat(invite));
+  })
+);
+
+/** Finds public groups/channels by keyword the account has never joined. */
+app.post(
+  "/api/telegram/groups/search",
+  requireApiKey,
+  route(async (req, res) => {
+    const query = String(req.body?.query ?? "").trim();
+    if (!query) {
+      return res.status(400).json({ success: false, error: "query is required." });
+    }
+    const limit = Math.min(Number(req.body?.limit) || 20, 50);
+    res.json({ success: true, results: await telegram.searchPublicChats(query, limit) });
   })
 );
 
@@ -347,6 +370,29 @@ app.post(
     const { prefix = "", limit = 100 } = req.body ?? {};
     const result = await r2.listObjects(String(prefix), Math.min(Number(limit) || 100, 1000));
     res.json({ success: true, ...result });
+  })
+);
+
+/**
+ * Streams an object straight through with Content-Disposition: attachment,
+ * so a plain <a href> to this URL makes the browser save it to the device --
+ * the file's own name, not a viewer tab -- regardless of whether the bucket
+ * has a public URL configured at all. GET, not POST: this is meant to be
+ * navigated to directly, which is also why requireApiKey accepts the key as
+ * a query param here (see its own comment).
+ */
+app.get(
+  "/api/r2/download",
+  requireApiKey,
+  route(async (req, res) => {
+    const key = String(req.query.key ?? "").trim();
+    if (!key) return res.status(400).json({ success: false, error: "A key is required." });
+    const filename = String(req.query.filename ?? key.split("/").pop() ?? "download").replace(/"/g, "");
+    const { stream, contentType, contentLength } = await r2.getObjectStream(key);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Type", contentType);
+    if (contentLength) res.setHeader("Content-Length", String(contentLength));
+    stream.pipe(res);
   })
 );
 
