@@ -19,6 +19,7 @@ import * as s3migrate from "./s3migrate.js";
 import * as urlfetch from "./urlfetch.js";
 import { scanGroup } from "./scanner.js";
 import * as telegram from "./telegram.js";
+import { signInWithTelegram } from "./telegramLogin.js";
 import { loop } from "./worker.js";
 
 const app = express();
@@ -64,6 +65,19 @@ app.get(
       r2: await r2.ping(),
       takeout: takeout.isTakeoutActive(),
     });
+  })
+);
+
+// -------------------------------------------------------- sign-in widget
+
+// No requireApiKey here on purpose: this is how a visitor gets their first
+// session, before they have anything to authenticate with. It's safe left
+// open because signInWithTelegram() rejects anything not cryptographically
+// signed by our own Telegram Login Widget bot.
+app.post(
+  "/api/auth/telegram-login",
+  route(async (req, res) => {
+    res.json({ success: true, ...(await signInWithTelegram(req.body ?? {})) });
   })
 );
 

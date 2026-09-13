@@ -22,6 +22,13 @@ export const config = {
   telegramPhone: str("TELEGRAM_PHONE"),
   telegramSession: str("TELEGRAM_SESSION_STRING"),
 
+  // A separate, lightweight Bot API bot used only for "Log in with Telegram"
+  // on the sign-in screen -- unrelated to the userbot above, which needs a
+  // full phone-number MTProto session instead. Create one with @BotFather,
+  // then run /setdomain in the same chat pointed at the deployed frontend
+  // origin, or the Login Widget refuses to render there.
+  telegramLoginBotToken: str("TELEGRAM_LOGIN_BOT_TOKEN"),
+
   r2AccountId: str("R2_ACCOUNT_ID"),
   r2AccessKeyId: str("R2_ACCESS_KEY_ID"),
   r2SecretAccessKey: str("R2_SECRET_ACCESS_KEY"),
