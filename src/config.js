@@ -29,6 +29,21 @@ export const config = {
   // origin, or the Login Widget refuses to render there.
   telegramLoginBotToken: str("TELEGRAM_LOGIN_BOT_TOKEN"),
 
+  // Subscriptions: the same Login Widget bot above also DMs the operator a
+  // payment claim with Approve/Reject buttons (one bot, two jobs, so there's
+  // only one to create). TELEGRAM_ADMIN_CHAT_ID is the operator's own chat
+  // id with that bot -- send it any message and check getUpdates to find it.
+  telegramAdminChatId: str("TELEGRAM_ADMIN_CHAT_ID"),
+  // Shared secret a phone-automation app (Tasker/MacroDroid/...) presents
+  // when POSTing a raw ABA payment-notification text to /api/subscription/aba-ingest.
+  // Unset means the endpoint refuses everything -- fail-closed on purpose.
+  abaIngestSecret: str("ABA_INGEST_SECRET"),
+  // The account name ABA's own notification text shows for a payment
+  // addressed to the operator -- matched literally against incoming text
+  // before an amount is ever trusted, so a notification for someone else's
+  // account can't be replayed here.
+  abaMerchantName: str("ABA_MERCHANT_NAME"),
+
   r2AccountId: str("R2_ACCOUNT_ID"),
   r2AccessKeyId: str("R2_ACCESS_KEY_ID"),
   r2SecretAccessKey: str("R2_SECRET_ACCESS_KEY"),
