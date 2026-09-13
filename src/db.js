@@ -84,6 +84,33 @@ export async function r2Settings() {
   };
 }
 
+/** Source S3-compatible credentials, preferring environment variables over the database. */
+export async function s3SourceSettings() {
+  const fromEnv = {
+    endpointUrl: config.s3Endpoint,
+    accessKeyId: config.s3AccessKeyId,
+    secretAccessKey: config.s3SecretAccessKey,
+    bucketName: config.s3BucketName,
+    region: config.s3Region || "us-east-1",
+    forcePathStyle: config.s3ForcePathStyle,
+  };
+  // Fully configured by environment variables -- skip Supabase entirely, so a
+  // local one-off script (e.g. the S3-to-R2 migration CLI) needs no
+  // SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY just to read these credentials.
+  if (fromEnv.endpointUrl && fromEnv.accessKeyId && fromEnv.secretAccessKey && fromEnv.bucketName) {
+    return fromEnv;
+  }
+  const row = await single("s3_source_settings");
+  return {
+    endpointUrl: fromEnv.endpointUrl || row.endpoint_url || "",
+    accessKeyId: fromEnv.accessKeyId || row.access_key_id || "",
+    secretAccessKey: fromEnv.secretAccessKey || row.secret_access_key || "",
+    bucketName: fromEnv.bucketName || row.bucket_name || "",
+    region: fromEnv.region || row.region || "us-east-1",
+    forcePathStyle: row.force_path_style ?? fromEnv.forcePathStyle ?? true,
+  };
+}
+
 export async function downloadSettings() {
   const row = await single("download_settings");
   return {

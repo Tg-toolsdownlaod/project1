@@ -16,6 +16,7 @@ import * as mirror from "./mirror.js";
 import * as takeout from "./takeout.js";
 import * as r2 from "./r2.js";
 import * as s3migrate from "./s3migrate.js";
+import * as s3source from "./s3source.js";
 import * as urlfetch from "./urlfetch.js";
 import { scanGroup } from "./scanner.js";
 import * as telegram from "./telegram.js";
@@ -391,6 +392,30 @@ app.post(
   "/api/s3import/status",
   requireApiKey,
   route(async (_req, res) => res.json({ success: true, ...s3migrate.status() }))
+);
+
+// ---------------------------------------------------------------- s3 source (browse only)
+
+/** Verifies the stored source-S3 credentials really can reach the bucket. */
+app.post(
+  "/api/s3source/test",
+  requireApiKey,
+  route(async (_req, res) => {
+    const result = await s3source.testConnection();
+    await upsertSingle("s3_source_settings", { connected: true, last_connected_at: nowIso() });
+    res.json({ success: true, ...result });
+  })
+);
+
+/** Lists what is actually in the source bucket, so it can be browsed before migrating. */
+app.post(
+  "/api/s3source/objects",
+  requireApiKey,
+  route(async (req, res) => {
+    const { prefix = "", limit = 100 } = req.body ?? {};
+    const result = await s3source.listObjects(String(prefix), Math.min(Number(limit) || 100, 1000));
+    res.json({ success: true, ...result });
+  })
 );
 
 // ---------------------------------------------------------------- url lists

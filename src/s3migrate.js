@@ -35,7 +35,21 @@ function idleState() {
 
 /** A snapshot of the current or most recent run, safe to poll from the UI. */
 export function status() {
-  return { ...state, errors: state.errors.slice(-20) };
+  return {
+    running: state.running,
+    dry_run: state.dryRun,
+    prefix: state.prefix,
+    started_at: state.startedAt,
+    finished_at: state.finishedAt,
+    total: state.total,
+    scanned: state.scanned,
+    migrated: state.migrated,
+    skipped: state.skipped,
+    deleted: state.deleted,
+    failed: state.failed,
+    bytes: state.bytes,
+    errors: state.errors.slice(-20),
+  };
 }
 
 /**
@@ -48,7 +62,7 @@ export async function run({ prefix = "", dryRun = true, deleteSource = true, con
   state = { ...idleState(), running: true, dryRun, prefix, startedAt: new Date().toISOString() };
 
   try {
-    const objects = await s3.listObjects(prefix);
+    const objects = await s3.listAllObjects(prefix);
     state.total = objects.length;
 
     let next = 0;
