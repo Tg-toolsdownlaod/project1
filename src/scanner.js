@@ -27,22 +27,33 @@ export function parseEpNumber(...sources) {
   return null;
 }
 
-/** Returns file details when the message carries a video, else null. */
-function videoInfo(message) {
+/**
+ * Returns file details when the message carries a video or an audio file
+ * (a "song" -- music, a voice note, anything Telegram tags as audio), else
+ * null. Everything else (photos, plain documents, stickers) is skipped.
+ */
+function mediaInfo(message) {
   const document = message.media?.document;
   if (!document) return null;
 
   const mime = document.mimeType ?? "";
   const attributes = document.attributes ?? [];
   const videoAttr = attributes.find((a) => a instanceof Api.DocumentAttributeVideo);
-  if (!mime.startsWith("video/") && !videoAttr) return null;
+  const audioAttr = attributes.find((a) => a instanceof Api.DocumentAttributeAudio);
+
+  let mediaType;
+  if (mime.startsWith("video/") || videoAttr) mediaType = "video";
+  else if (mime.startsWith("audio/") || audioAttr) mediaType = "audio";
+  else return null;
 
   const nameAttr = attributes.find((a) => a instanceof Api.DocumentAttributeFilename);
+  const fallbackExt = mediaType === "audio" ? "mp3" : "mp4";
   return {
-    fileName: nameAttr?.fileName || `${message.id}.mp4`,
+    fileName: nameAttr?.fileName || `${message.id}.${fallbackExt}`,
     fileSize: Number(document.size ?? 0),
-    duration: Math.round(Number(videoAttr?.duration ?? 0)),
-    mimeType: mime || "video/mp4",
+    duration: Math.round(Number(videoAttr?.duration ?? audioAttr?.duration ?? 0)),
+    mimeType: mime || (mediaType === "audio" ? "audio/mpeg" : "video/mp4"),
+    mediaType,
   };
 }
 
@@ -102,7 +113,7 @@ export async function scanGroup(groupId, messageLimit = 3000) {
 
   for await (const message of client.iterMessages(entity, { limit: messageLimit })) {
     seen += 1;
-    const info = videoInfo(message);
+    const info = mediaInfo(message);
     if (!info) continue;
     if (knownMessageIds.has(String(message.id))) continue;
 
@@ -119,6 +130,8 @@ export async function scanGroup(groupId, messageLimit = 3000) {
       file_name: info.fileName,
       file_size: info.fileSize,
       duration: info.duration,
+      media_type: info.mediaType,
+      mime_type: info.mimeType,
       status: "pending",
     });
     knownMessageIds.add(String(message.id));

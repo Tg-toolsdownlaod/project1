@@ -22,6 +22,28 @@ export const config = {
   telegramPhone: str("TELEGRAM_PHONE"),
   telegramSession: str("TELEGRAM_SESSION_STRING"),
 
+  // A separate, lightweight Bot API bot used only for "Log in with Telegram"
+  // on the sign-in screen -- unrelated to the userbot above, which needs a
+  // full phone-number MTProto session instead. Create one with @BotFather,
+  // then run /setdomain in the same chat pointed at the deployed frontend
+  // origin, or the Login Widget refuses to render there.
+  telegramLoginBotToken: str("TELEGRAM_LOGIN_BOT_TOKEN"),
+
+  // Subscriptions: the same Login Widget bot above also DMs the operator a
+  // payment claim with Approve/Reject buttons (one bot, two jobs, so there's
+  // only one to create). TELEGRAM_ADMIN_CHAT_ID is the operator's own chat
+  // id with that bot -- send it any message and check getUpdates to find it.
+  telegramAdminChatId: str("TELEGRAM_ADMIN_CHAT_ID"),
+  // Shared secret a phone-automation app (Tasker/MacroDroid/...) presents
+  // when POSTing a raw ABA payment-notification text to /api/subscription/aba-ingest.
+  // Unset means the endpoint refuses everything -- fail-closed on purpose.
+  abaIngestSecret: str("ABA_INGEST_SECRET"),
+  // The account name ABA's own notification text shows for a payment
+  // addressed to the operator -- matched literally against incoming text
+  // before an amount is ever trusted, so a notification for someone else's
+  // account can't be replayed here.
+  abaMerchantName: str("ABA_MERCHANT_NAME"),
+
   r2AccountId: str("R2_ACCOUNT_ID"),
   r2AccessKeyId: str("R2_ACCESS_KEY_ID"),
   r2SecretAccessKey: str("R2_SECRET_ACCESS_KEY"),
@@ -29,6 +51,17 @@ export const config = {
   r2EndpointUrl: str("R2_ENDPOINT_URL"),
   r2PublicUrl: str("R2_PUBLIC_URL"),
   r2Region: str("R2_REGION", "auto"),
+
+  // Source S3-compatible bucket (e.g. Contabo), used only by
+  // src/migrate-s3-to-r2.js / POST /api/s3import/* to pull existing videos
+  // into R2 once and then delete them here. Both key names are accepted
+  // since providers' setup docs disagree on which one they show.
+  s3Endpoint: str("S3_ENDPOINT"),
+  s3AccessKeyId: str("S3_ACCESS_KEY_ID", str("S3_ACCESS_KEY")),
+  s3SecretAccessKey: str("S3_SECRET_ACCESS_KEY", str("S3_SECRET_KEY")),
+  s3BucketName: str("S3_BUCKET_NAME"),
+  s3Region: str("S3_REGION", "us-east-1"),
+  s3ForcePathStyle: str("S3_FORCE_PATH_STYLE") === "true",
 
   workerInterval: int("WORKER_INTERVAL", 30),
   // How many list URLs are pulled into R2 at once. These are plain HTTP

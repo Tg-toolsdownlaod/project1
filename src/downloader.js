@@ -141,7 +141,8 @@ export async function runDownload(downloadId) {
         episode.file_name || "video.mp4"
       );
       await db().from("downloads").update({ progress: 92 }).eq("id", downloadId);
-      r2Url = await r2.upload(localPath, r2Key);
+      const contentType = episode.mime_type || (episode.media_type === "audio" ? "audio/mpeg" : "video/mp4");
+      r2Url = await r2.upload(localPath, r2Key, contentType);
     }
 
     const { size } = await fs.stat(localPath);
@@ -156,7 +157,10 @@ export async function runDownload(downloadId) {
         downloaded_bytes: size,
       })
       .eq("id", downloadId);
-    await db().from("episodes").update({ status: "completed", r2_key: r2Key }).eq("id", episode.id);
+    await db()
+      .from("episodes")
+      .update({ status: "completed", r2_key: r2Key, r2_url: r2Url })
+      .eq("id", episode.id);
     await refreshCounters(group.id, episode.topic_id);
   } catch (err) {
     await fail(downloadId, String(err?.message ?? err).slice(0, 500));

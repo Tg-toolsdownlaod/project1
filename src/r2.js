@@ -3,7 +3,9 @@ import { createReadStream } from "node:fs";
 
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -170,10 +172,37 @@ export async function listObjects(prefix = "", limit = 100) {
   return { bucket, objects: objects.slice(0, limit), total: objects.length };
 }
 
+/**
+ * Opens a streaming read of one object -- used by /api/r2/download to proxy
+ * the file through with a Content-Disposition header, so a browser saves it
+ * to the device regardless of whether the bucket has a public URL at all.
+ */
+export async function getObjectStream(key) {
+  const { client, bucket } = await clientAndBucket();
+  const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  return {
+    stream: result.Body,
+    contentType: result.ContentType || "application/octet-stream",
+    contentLength: result.ContentLength,
+  };
+}
+
 /** Removes one object, so a mistaken upload can be undone from the panel. */
 export async function remove(key) {
   const { client, bucket } = await clientAndBucket();
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+/** Existence + size check -- used by s3migrate.js to skip already-migrated objects. */
+export async function headObject(key) {
+  const { client, bucket } = await clientAndBucket();
+  try {
+    const result = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return { exists: true, size: result.ContentLength ?? 0 };
+  } catch (err) {
+    if (err?.$metadata?.httpStatusCode === 404 || err?.name === "NotFound") return { exists: false, size: 0 };
+    throw err;
+  }
 }
 
 /**
@@ -192,7 +221,7 @@ export function buildUploadKey(folder, fileName) {
 }
 
 /** Slugs each segment of a folder path, dropping empty and dot-only ones. */
-function slugPath(value) {
+export function slugPath(value) {
   return String(value || "")
     .split("/")
     .map((part) => part.trim())
@@ -213,6 +242,9 @@ export function buildKey(pattern, group, topic, ep, fileName) {
 }
 
 function slug(value) {
-  const cleaned = (value || "").replace(/[^\p{L}\p{N}\-. ]+/gu, "").trim();
+  // \p{M} keeps combining marks -- Khmer (and Vietnamese, Devanagari, ...)
+  // spell most vowels and the subscript sign as marks attached to a letter,
+  // so dropping them silently corrupted non-Latin names into the wrong word.
+  const cleaned = (value || "").replace(/[^\p{L}\p{M}\p{N}\-. ]+/gu, "").trim();
   return cleaned.replace(/\s+/g, "-") || "untitled";
 }
